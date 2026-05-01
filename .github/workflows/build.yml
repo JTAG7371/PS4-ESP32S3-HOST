@@ -15,20 +15,20 @@ jobs:
       matrix:
         include:
           - key: zero-4mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=default,PSRAM=enabled"
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,CPUFreq=240,DebugLevel=none,DFUOnBoot=disabled,EraseFlash=none,EventsCore=1,FlashMode=qio,FlashSize=4M,JTAGAdapter=disabled,MSCOnBoot=disabled,PartitionScheme=default,PSRAM=enabled,UploadMode=uart0,UploadSpeed=921600,USBMode=hwcdc,Zigbee=default"
             define: BOARD_S3_ZERO
 
           - key: geek-16mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,CPUFreq=240,DebugLevel=none,DFUOnBoot=disabled,EraseFlash=none,EventsCore=1,FlashMode=qio,FlashSize=16M,JTAGAdapter=disabled,MSCOnBoot=disabled,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,UploadMode=uart0,UploadSpeed=921600,USBMode=hwcdc,Zigbee=default"
             define: BOARD_S3_GEEK
 
           - key: generic-4mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=default,PSRAM=disabled"
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,CPUFreq=240,DebugLevel=none,DFUOnBoot=disabled,EraseFlash=none,EventsCore=1,FlashMode=qio,FlashSize=4M,JTAGAdapter=disabled,MSCOnBoot=disabled,PartitionScheme=default,PSRAM=disabled,UploadMode=uart0,UploadSpeed=921600,USBMode=hwcdc,Zigbee=default"
             define: BOARD_S3_ZERO
 
           - key: generic-16mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled"
-            define: BOARD_S3_GEEK
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,CPUFreq=240,DebugLevel=none,DFUOnBoot=disabled,EraseFlash=none,EventsCore=1,FlashMode=qio,FlashSize=16M,JTAGAdapter=disabled,MSCOnBoot=disabled,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled,UploadMode=uart0,UploadSpeed=921600,USBMode=hwcdc,Zigbee=default"
+            define: BOARD_S3_ZERO
 
     steps:
       - uses: actions/checkout@v4
