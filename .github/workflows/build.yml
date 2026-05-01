@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - key: geek-16mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=ffat,PSRAM=opi"
+            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
             define: BOARD_S3_GEEK
 
           - key: zero-4mb
@@ -27,7 +27,7 @@ jobs:
             define: BOARD_S3_ZERO
 
           - key: generic-16mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=ffat,PSRAM=disabled"
+            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled"
             define: BOARD_S3_ZERO
 
     steps:
