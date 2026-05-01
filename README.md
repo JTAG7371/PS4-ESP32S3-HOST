@@ -69,7 +69,7 @@ Once the device is running, updates can be pushed wirelessly — no USB required
 | Flash Size | **16MB (128Mb)** |
 | Partition Scheme | **16M Flash (3MB APP/9.9MB FATFS)** |
 | Flash Mode | QIO 80MHz |
-| PSRAM | **OPI PSRAM** |
+| PSRAM | **QSPI PSRAM** |
 | CPU Frequency | 240MHz |
 | USB CDC On Boot | **Enabled** ← critical |
 | USB Mode | Hardware CDC and JTAG |
