@@ -24,11 +24,11 @@ jobs:
 
           - key: generic-4mb
             fqbn: "esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=default,PSRAM=disabled"
-            define: BOARD_S3_ZERO
+            define: BOARD_S3_4MB
 
           - key: generic-16mb
             fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled"
-            define: BOARD_S3_ZERO
+            define: USE_FFAT
 
     steps:
       - uses: actions/checkout@v4
