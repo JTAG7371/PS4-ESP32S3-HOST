@@ -20,16 +20,16 @@ jobs:
             define: BOARD_S3_ZERO
 
           - key: geek-16mb
-            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=enabled"
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
             define: BOARD_S3_GEEK
 
           - key: generic-4mb
             fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc"
-            define: BOARD_S3_GENERIC_4MB
+            define: BOARD_S3_ZERO
 
           - key: generic-16mb
             fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
-            define: BOARD_S3_GENERIC_16MB
+            define: BOARD_S3_ZERO
 
     steps:
       - uses: actions/checkout@v4
@@ -148,15 +148,14 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Rename binaries with board prefix
+        run: |
+          for key in geek-16mb zero-4mb generic-4mb generic-16mb; do
+            mv release/$key/fwupdate.bin                        release/$key/${key}-fwupdate.bin
+            mv release/$key/ESP32S3_WebServer.ino.merged.bin    release/$key/${key}-merged.bin
+          done
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/geek-16mb/fwupdate.bin
-            release/geek-16mb/ESP32S3_WebServer.ino.merged.bin
-            release/zero-4mb/fwupdate.bin
-            release/zero-4mb/ESP32S3_WebServer.ino.merged.bin
-            release/generic-4mb/fwupdate.bin
-            release/generic-4mb/ESP32S3_WebServer.ino.merged.bin
-            release/generic-16mb/fwupdate.bin
-            release/generic-16mb/ESP32S3_WebServer.ino.merged.bin
+          files: release/**/*
