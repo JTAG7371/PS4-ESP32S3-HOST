@@ -3,6 +3,7 @@ name: Build & Deploy
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -82,11 +83,13 @@ jobs:
             --output-dir ${{ github.workspace }}/out \
             /tmp/ESP32S3_WebServer
 
-      - name: Stage merged binary
+      - name: Stage binaries
         run: |
           mkdir -p staged/${{ matrix.key }}
           cp out/ESP32S3_WebServer.ino.merged.bin \
              staged/${{ matrix.key }}/ESP32S3_WebServer.ino.merged.bin
+          cp out/ESP32S3_WebServer.ino.bin \
+             staged/${{ matrix.key }}/fwupdate.bin
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
@@ -128,3 +131,32 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+
+  # ── Release ────────────────────────────────────────────────────────
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fw-*
+          path: release
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/geek-16mb/fwupdate.bin
+            release/geek-16mb/ESP32S3_WebServer.ino.merged.bin
+            release/zero-4mb/fwupdate.bin
+            release/zero-4mb/ESP32S3_WebServer.ino.merged.bin
+            release/generic-4mb/fwupdate.bin
+            release/generic-4mb/ESP32S3_WebServer.ino.merged.bin
+            release/generic-16mb/fwupdate.bin
+            release/generic-16mb/ESP32S3_WebServer.ino.merged.bin
