@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No Files Uploaded</title>
+  <link rel="stylesheet" href="/admin/style.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .empty-state {
+      text-align: center;
+      padding: 48px 32px;
+      max-width: 420px;
+    }
+    .empty-icon {
+      width: 56px; height: 56px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+    }
+    .empty-icon svg { width: 24px; height: 24px; stroke: var(--text-dim); fill: none; }
+    .empty-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      margin-bottom: 28px;
+      letter-spacing: 0.02em;
+    }
+    a.btn-accent, a.btn-accent:link, a.btn-accent:visited { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+        <polyline points="16 10 12 6 8 10"/>
+        <line x1="12" y1="6" x2="12" y2="16"/>
+      </svg>
+    </div>
+    <div class="page-title" style="margin-bottom:8px">No files uploaded</div>
+    <div class="empty-desc">
+      Upload your web files via the admin panel<br>to get started.
+    </div>
+    <a href="/admin" class="btn btn-accent">Open Admin Panel</a>
+  </div>
+</body>
+</html>

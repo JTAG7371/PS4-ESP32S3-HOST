@@ -2,8 +2,8 @@
 
 // ── Board selection ───────────────────────────────────────────────
 // Uncomment the board you are using. Only one should be active.
-// #define BOARD_S3_ZERO   // Waveshare ESP32-S3-Zero  (4MB flash, Quad PSRAM)
-#define BOARD_S3_GEEK   // Waveshare ESP32-S3-GEEK  (16MB flash, OPI PSRAM)
+#define BOARD_S3_ZERO   // Waveshare ESP32-S3-Zero  (4MB flash, Quad PSRAM)
+// #define BOARD_S3_GEEK   // Waveshare ESP32-S3-GEEK  (16MB flash, OPI PSRAM)
 
 // ── Board-specific pin definitions ────────────────────────────────
 #if defined(BOARD_S3_GEEK)

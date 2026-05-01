@@ -385,7 +385,7 @@ void initRoutes() {
     if (sdOk && SD.exists("/index.html"))       { sendFile(req, SD,         "/index.html"); return; }
 #endif
     if (InternalFS.exists("/index.html"))        { sendFile(req, InternalFS, "/index.html"); return; }
-    AsyncWebServerResponse *r = req->beginResponse_P(200, F("text/html"), _admin_html, _admin_html_len);
+    AsyncWebServerResponse *r = req->beginResponse_P(200, F("text/html"), _no_files_html, _no_files_html_len);
     r->addHeader(F("Content-Encoding"), F("gzip"));
     r->addHeader(F("Cache-Control"),    F("no-cache"));
     req->send(r);
