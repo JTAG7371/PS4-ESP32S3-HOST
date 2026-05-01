@@ -12,6 +12,38 @@ Uncomment the correct board in `config.h` before compiling.
 
 ---
 
+## Flashing firmware
+
+Pre-built binaries are attached to every [GitHub Release](../../releases/latest).
+
+### Option 1 — Web flasher (easiest)
+Open **[The Flasher Page](https://jtag7371.github.io/PS4-ESP32S3-HOST/)** in **Chrome or Edge** (Firefox not supported), select your board, connect via USB, and click Flash. No tools required.
+
+### Option 2 — esptool.py
+Download `ESP32S3_WebServer.ino.merged.bin` for your board from the release assets and flash at offset `0x0`:
+```
+esptool.py --chip esp32s3 write_flash 0x0 ESP32S3_WebServer.ino.merged.bin
+```
+Requires the device to be in download mode — hold **BOOT** while plugging in USB.
+
+### Option 3 — Compile from source
+See **Arduino IDE settings** and **Libraries** sections below. Run `python build_panel.py` before compiling to generate `admin_panel.h`.
+
+---
+
+## OTA firmware update
+
+Once the device is running, updates can be pushed wirelessly — no USB required.
+
+1. Download `fwupdate.bin` for your board from the [releases page](../../releases/latest)
+2. Browse to `http://<board-ip>/admin`
+3. Go to **Firmware Update**
+4. Upload `fwupdate.bin` and wait for the device to reboot
+
+> **Note:** OTA only updates the application — it cannot change the partition table or bootloader. If a release changes the partition scheme, use the web flasher or esptool.py instead.
+
+---
+
 ## Arduino IDE settings — Waveshare ESP32-S3-Zero
 
 | Setting | Value |
