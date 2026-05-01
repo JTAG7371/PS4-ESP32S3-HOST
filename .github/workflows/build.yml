@@ -68,7 +68,7 @@ jobs:
             --fqbn "${{ matrix.fqbn }}" \
             --build-property "compiler.cpp.extra_flags=-D${{ matrix.define }}" \
             --output-dir out \
-            .
+            ESP32S3_WebServer.ino
 
       - name: Stage merged binary
         run: |
