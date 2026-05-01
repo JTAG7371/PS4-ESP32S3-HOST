@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32 Admin</title>
+  <link rel="stylesheet" href="/admin/style.css">
+  <style>
+    body { overflow: hidden; margin: 0; }
+    .main { margin-left: var(--nav-width); height: 100vh; overflow-y: auto; }
+
+    /* ── Page transitions ─────────────────────────────── */
+    .view { display: none; }
+    .view.active {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Toast ────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      font-size: 12px; z-index: 9999;
+      opacity: 0; transform: translateY(12px);
+      transition: opacity 0.22s ease, transform 0.22s ease;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    #toast.success { border: 1px solid var(--green-dim); }
+    #toast.error   { border: 1px solid var(--red-dim); }
+    #toast.info    { border: 1px solid var(--accent); }
+    .ti {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    #toast.success .ti { background: rgba(34,197,94,0.12);  border: 1px solid var(--green-dim); color: var(--green); }
+    #toast.error   .ti { background: rgba(239,68,68,0.12);  border: 1px solid var(--red-dim);   color: var(--red); }
+    #toast.info    .ti { background: rgba(59,130,246,0.12); border: 1px solid var(--accent);    color: var(--accent); }
+    .ti svg { width: 12px; height: 12px; fill: currentColor; }
+    #toast-title { font-weight: 600; font-size: 12px; }
+    #toast.success #toast-title { color: var(--green); }
+    #toast.error   #toast-title { color: var(--red); }
+    #toast.info    #toast-title { color: var(--accent); }
+    #toast-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+
+    /* ── Reboot overlay ───────────────────────────────── */
+    #reboot-overlay {
+      display: none; position: fixed; inset: 0;
+      background: var(--bg-base); z-index: 500;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    #reboot-overlay.show { display: flex; }
+    .ro-icon {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: rgba(239,68,68,0.1); border: 1px solid var(--red);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 18px;
+      animation: spin-icon 1s linear infinite;
+    }
+    .ro-icon svg { width: 24px; height: 24px; fill: var(--red); }
+    @keyframes spin-icon { to { transform: rotate(360deg); } }
+    .ro-count {
+      font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800;
+      color: var(--red); letter-spacing: -0.04em; line-height: 1; margin-bottom: 6px;
+    }
+    .ro-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
+    .ro-title { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; color: var(--red); margin-top: 16px; margin-bottom: 6px; }
+    .ro-desc  { font-size: 12px; color: var(--text-dim); max-width: 320px; text-align: center; line-height: 1.7; }
+
+    /* ── Info page ────────────────────────────────────── */
+    .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .full { grid-column: 1 / -1; }
+    .stat-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; transition: border-color var(--transition); display: flex; flex-direction: column; gap: 4px; }
+    .stat-card:hover { border-color: var(--border-bright); }
+    .stat-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+    .stat-value { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1.1; }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.green  { color: var(--green); }
+    .stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+    .resource-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color var(--transition); }
+    .resource-card:hover { border-color: var(--border-bright); }
+    .resource-header { padding: 14px 18px 0; display: flex; justify-content: space-between; align-items: baseline; }
+    .resource-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .resource-pct { font-size: 11px; color: var(--text-dim); }
+    .resource-bar { margin: 10px 18px 0; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .resource-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+    .resource-fill.blue  { background: var(--accent); }
+    .resource-fill.amber { background: var(--amber); }
+    .resource-fill.green { background: var(--green); }
+    .resource-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 10px 18px 16px; }
+    .resource-stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+    .resource-stat-val { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-top: 2px; }
+    .resource-stat-val.green  { color: var(--green); }
+    .resource-stat-val.amber  { color: var(--amber); }
+    .resource-stat-val.accent { color: var(--accent); }
+    .list-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color var(--transition); }
+    .list-card:hover { border-color: var(--border-bright); }
+    .list-card-header { padding: 10px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); display: flex; align-items: center; gap: 6px; font-family: 'Syne', sans-serif; font-weight: 700; }
+    .list-card-header svg { width: 11px; height: 11px; opacity: 0.5; }
+    .kv-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); transition: background var(--transition); }
+    .kv-row:last-child { border-bottom: none; }
+    .kv-row:hover { background: var(--bg-hover); }
+    .kv-key { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .kv-val { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .kv-val.accent { color: var(--accent); }
+    .kv-val.green  { color: var(--green); }
+    .kv-val.red    { color: var(--red); }
+    .hash-row { padding: 10px 16px; border-top: 1px solid var(--border); }
+    .hash-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 4px; }
+    .hash-val { font-size: 10px; color: var(--text-dim); word-break: break-all; }
+    .badge-online  { display:inline-block;padding:2px 7px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:3px;color:var(--green);font-size:10px; }
+    .badge-offline { display:inline-block;padding:2px 7px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:3px;color:var(--red);font-size:10px; }
+
+    /* ── File manager ─────────────────────────────────── */
+    .breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 8px 14px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); font-size: 11px; }
+    .breadcrumb-sep { color: var(--border-bright); margin: 0 2px; }
+    .breadcrumb-part { color: var(--text-dim); cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: color var(--transition), background var(--transition); }
+    .breadcrumb-part:hover { color: var(--accent); background: var(--accent-dim); }
+    .breadcrumb-part.current { color: var(--text-primary); cursor: default; font-weight: 600; }
+    .breadcrumb-part.current:hover { background: transparent; }
+    .fm-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .fm-toolbar-right { margin-left: auto; display: flex; gap: 8px; }
+    .entry-icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .entry-name { display: flex; align-items: center; gap: 8px; }
+    .entry-name.folder { color: var(--accent); cursor: pointer; }
+    .entry-name.folder:hover { text-decoration: underline; }
+    .ext-bin  { color: var(--amber); }
+    .ext-html { color: var(--green); }
+    .ext-js   { color: var(--accent); }
+    .confirm-wrap { display: none; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(239,68,68,0.06); border: 1px solid var(--red-dim); border-radius: var(--radius); font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+    .confirm-wrap.show { display: inline-flex; }
+    .mkdir-row { display: none; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg-elevated); }
+    .mkdir-row.show { display: flex; }
+    .mkdir-row input { flex: 1; }
+    .fm-sel-cb {
+      appearance: none; -webkit-appearance: none;
+      display: inline-block; position: relative;
+      width: 15px; height: 15px;
+      min-width: 15px; min-height: 15px;
+      aspect-ratio: 1 / 1;
+      flex-shrink: 0;
+      background: var(--bg-base);
+      border: 1.5px solid var(--border-bright);
+      border-radius: 3px;
+      cursor: pointer;
+      vertical-align: middle;
+      transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+    }
+    .fm-sel-cb:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .fm-sel-cb:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .fm-sel-cb:checked::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 46%;
+      width: 4px; height: 8px;
+      border-right: 1.5px solid #fff;
+      border-bottom: 1.5px solid #fff;
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+    .fm-sel-cb:indeterminate { background: var(--accent-dim); border-color: var(--accent); }
+    .fm-sel-cb:indeterminate::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 8px; height: 1.5px;
+      background: var(--accent);
+      border-radius: 1px;
+      transform: translate(-50%, -50%);
+    }
+    tr.fm-row-sel td { background: rgba(239,68,68,0.05); }
+    tr.fm-row-sel { box-shadow: inset 3px 0 0 var(--red-dim); }
+    .fm-th-sort { cursor:pointer; user-select:none; transition: color var(--transition), background var(--transition); }
+    .fm-th-sort:hover { color:var(--text-primary); background:var(--bg-hover); }
+    .fm-sort-arrow { display:inline-block; margin-left:4px; font-size:9px; opacity:0.3; vertical-align:middle; }
+    .fm-sort-arrow.on { opacity:1; color:var(--accent); }
+    .fm-sel-count { display:none; font-size:10px; color:var(--text-dim); padding:2px 7px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:3px; white-space:nowrap; }
+    .fm-sel-count.show { display:inline-block; }
+    .fm-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:36px 20px; color:var(--text-dim); font-size:11px; }
+    .fm-rename-inp { font-size:12px; width:100%; padding:2px 6px; background:var(--bg-base); border:1px solid var(--accent); border-radius:3px; color:var(--text-primary); outline:none; font-family:'JetBrains Mono',monospace; }
+    .fm-mv-item { display:flex; align-items:center; gap:7px; padding:7px 10px; font-size:12px; cursor:pointer; border-bottom:1px solid var(--border); transition:background var(--transition); color:var(--text-secondary); }
+    .fm-mv-item:last-child { border-bottom:none; }
+    .fm-mv-item:hover { background:var(--bg-hover); color:var(--text-primary); }
+    .fm-mv-item.up { color:var(--text-dim); font-style:italic; }
+    .up-overlay-inner { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px 28px; min-width: 280px; max-width: 360px; width: 90%; }
+
+    /* ── Upload page ──────────────────────────────────── */
+    .file-queue { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .file-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; transition: border-color var(--transition); }
+    .file-item.done   { border-color: var(--green-dim); }
+    .file-item.error  { border-color: var(--red-dim); }
+    .file-item.active { border-color: var(--accent); }
+    .file-item-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+    .file-item-name   { color: var(--text-primary); font-weight: 500; }
+    .file-item-size   { color: var(--text-dim); font-size: 11px; }
+    .file-item-status { font-size: 11px; }
+    .file-item.done   .file-item-status { color: var(--green); }
+    .file-item.error  .file-item-status { color: var(--red); }
+    .file-item.active .file-item-status { color: var(--accent); }
+    .file-item-status.waiting { color: var(--text-dim); }
+    .file-bar  { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+    .file-fill { height: 100%; border-radius: 1px; width: 0; transition: width 0.2s ease; }
+    .file-item.active .file-fill { background: var(--accent); }
+    .file-item.done   .file-fill { background: var(--green); width: 100% !important; }
+    .file-item.error  .file-fill { background: var(--red); }
+    .upload-summary { margin-top: 14px; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center; }
+
+    /* ── Config page ──────────────────────────────────── */
+    .save-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+    #restart-warn { display: none; align-items: center; gap: 6px; font-size: 11px; color: var(--amber); }
+    #confirm-row  { display: none; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--radius); font-size: 11px; }
+
+    /* ── Reboot page ──────────────────────────────────── */
+    .reboot-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color 0.3s; }
+    .reboot-card.confirming { border-color: var(--amber); }
+    .reboot-card.rebooting  { border-color: var(--red); }
+    .reboot-body { padding: 40px 32px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .reboot-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--bg-elevated); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; transition: all 0.3s; }
+    .reboot-icon svg { width: 24px; height: 24px; fill: var(--text-dim); transition: fill 0.3s; }
+    .reboot-card.confirming .reboot-icon { background: rgba(245,158,11,0.1); border-color: var(--amber); }
+    .reboot-card.confirming .reboot-icon svg { fill: var(--amber); }
+    .reboot-card.rebooting  .reboot-icon { background: rgba(239,68,68,0.1); border-color: var(--red); animation: spin-icon 1s linear infinite; }
+    .reboot-card.rebooting  .reboot-icon svg { fill: var(--red); }
+    .reboot-title { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+    .reboot-desc  { font-size: 12px; color: var(--text-dim); max-width: 360px; line-height: 1.7; margin-bottom: 28px; }
+    .btn-row { display: flex; gap: 10px; align-items: center; justify-content: center; }
+    #rb-idle     { display: flex; flex-direction: column; align-items: center; }
+    #rb-confirm  { display: none; flex-direction: column; align-items: center; }
+    #rb-rebooting{ display: none; flex-direction: column; align-items: center; }
+    .confirm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 4px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: var(--amber); font-size: 11px; margin-bottom: 18px; }
+    .rb-countdown { font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800; color: var(--red); letter-spacing: -0.04em; line-height: 1; margin-bottom: 8px; }
+    .rb-count-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px; }
+
+    /* ── Update page ──────────────────────────────────── */
+    .file-meta { margin-top: 12px; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; color: var(--text-secondary); line-height: 1.8; }
+    .file-meta .val { color: var(--text-primary); }
+
+    /* ── Format page ──────────────────────────────────── */
+    .danger-zone { border: 1px solid var(--red-dim); border-radius: var(--radius-lg); background: rgba(239,68,68,0.04); }
+
+    /* ── FS tabs ──────────────────────────────────────── */
+    .fs-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .fs-tab  { padding: 5px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; cursor: pointer; background: transparent; color: var(--text-dim); transition: all var(--transition); }
+    .fs-tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────── -->
+<div class="sidenav">
+  <div class="sidenav-logo">
+    <div class="chip-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 2H7v2H5v2H3v2h2v2H3v2h2v2H3v2h2v2h2v2h2v-2h2v2h2v-2h2v2h2v-2h2v-2h2v-2h-2v-2h2v-2h-2v-2h2V8h-2V6h-2V4h-2V2h-2v2h-2V2H9zm0 4h6v2h2v6h-2v2H9v-2H7V8h2V6zm2 4v4h2v-4h-2z"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">ESP32 / S3</div>
+      <div class="logo-sub">Admin Panel</div>
+    </div>
+  </div>
+
+  <nav>
+    <div class="sidenav-section">System</div>
+    <a href="#" class="active" onclick="nav('info',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+      ESP Info
+    </a>
+
+    <div class="sidenav-section">Storage</div>
+    <a href="#" onclick="nav('fileman',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+      File Manager
+    </a>
+    <a href="#" onclick="nav('upload',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+      File Upload
+    </a>
+    <a href="#" onclick="nav('format',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      Format Storage
+    </a>
+
+    <div class="sidenav-section">Firmware</div>
+    <a href="#" onclick="nav('update',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1-2.73 2.71-2.73 7.08 0 9.79 2.73 2.71 7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58 3.51-3.47 9.14-3.47 12.65 0L21 3v7.12z"/></svg>
+      Firmware Update
+    </a>
+    <a href="#" onclick="nav('config',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      Config Editor
+    </a>
+
+    <div class="sidenav-section">Control</div>
+    <a href="#" onclick="nav('reboot',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      Reboot ESP
+    </a>
+  </nav>
+
+  <div class="sidenav-status">
+    <div class="status-dot">
+      <div class="dot"></div>
+      <span id="nav-status">Online  /  ESP32-S3</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────── -->
+<div id="toast">
+  <div class="ti"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+  <div><div id="toast-title"></div><div id="toast-sub"></div></div>
+</div>
+
+<!-- ── Reboot overlay ──────────────────────────────────────────── -->
+<div id="reboot-overlay">
+  <div class="ro-icon"><svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></div>
+  <div class="ro-count" id="ro-n">5</div>
+  <div class="ro-label" id="ro-label">seconds until reconnect</div>
+  <div class="ro-title">Rebooting…</div>
+  <div class="ro-desc" id="ro-desc">The panel will reload automatically when the board comes back online.</div>
+</div>
+
+<!-- ── Main content ────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- ═══════════════════════════════════════ INFO ═══ -->
+  <div id="view-info" class="view active">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">System Information</div>
+        <div class="page-subtitle">ESP32-S3  /  Live board diagnostics</div>
+      </div>
+      <div class="dashboard" id="dash">
+        <div class="stat-card full" style="flex-direction:row;align-items:center;justify-content:center;gap:10px;padding:14px 20px">
+          <div style="width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+          <span style="font-size:12px;color:var(--text-dim)">Loading…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ FILEMAN ═══ -->
+  <div id="view-fileman" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">File Manager</div>
+        <div class="page-subtitle" id="fm-sub">Loading…</div>
+      </div>
+      <div class="fs-tabs">
+        <button class="fs-tab active" onclick="fmSwitchFs('lfs',this)" id="tab-lfs">Internal FS</button>
+        <button class="fs-tab" onclick="fmSwitchFs('sd',this)">SD Card</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="breadcrumb" id="fm-breadcrumb"></div>
+        <div class="fm-toolbar">
+          <button class="btn" style="padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:5px" onclick="fmToggleMkdir()">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+            New Folder
+          </button>
+          <button id="fm-del-sel-btn" class="btn btn-danger" style="display:none;padding:5px 10px;font-size:11px;align-items:center;gap:5px" onclick="fmAskDelSel()">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span id="fm-del-sel-lbl">Delete selected</span>
+          </button>
+          <span id="fm-del-sel-cfm" class="confirm-wrap">
+            <span style="color:var(--red);font-size:10px" id="fm-del-sel-txt">Delete?</span>
+            <button class="btn" style="padding:3px 8px;font-size:10px" onclick="fmCancelDelSel()">Cancel</button>
+            <button class="btn btn-danger" style="padding:3px 8px;font-size:10px" onclick="fmDoDeleteSelected()">Confirm</button>
+          </span>
+          <span id="fm-sel-count" class="fm-sel-count"></span>
+          <div class="fm-toolbar-right">
+            <button class="btn btn-accent" style="padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:5px" onclick="document.getElementById('fm-upinput').click()">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+              Upload Here
+            </button>
+            <input id="fm-upinput" type="file" multiple style="display:none" onchange="fmUploadFiles(this.files)">
+          </div>
+        </div>
+        <div class="mkdir-row" id="fm-mkdir-row">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;color:var(--text-dim)"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+          <input id="fm-mkdir-input" placeholder="Folder name…" style="font-size:12px" onkeydown="if(event.key==='Enter')fmDoMkdir();if(event.key==='Escape')fmToggleMkdir()">
+          <button class="btn btn-accent" style="padding:4px 10px;font-size:11px" onclick="fmDoMkdir()">Create</button>
+          <button class="btn" style="padding:4px 10px;font-size:11px" onclick="fmToggleMkdir()">Cancel</button>
+        </div>
+        <table>
+          <thead><tr><th style="width:30px;text-align:center;padding:6px"><input type="checkbox" class="fm-sel-cb" id="fm-cb-all" onchange="fmToggleSelAll(this)"></th><th class="fm-th-sort" onclick="fmSetSort('name')">Name<span class="fm-sort-arrow on" id="fm-sort-name">↑</span></th><th class="fm-th-sort" style="width:80px" onclick="fmSetSort('size')">Size<span class="fm-sort-arrow" id="fm-sort-size">↕</span></th><th style="width:60px;text-align:center">Get</th><th style="width:70px;text-align:center">Edit</th><th style="width:130px;text-align:center">Remove</th></tr></thead>
+          <tbody id="fm-body"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ UPLOAD ═══ -->
+  <div id="view-upload" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">File Uploader</div>
+        <div class="page-subtitle" id="up-subtitle">Select a destination and choose files</div>
+      </div>
+      <div class="fs-tabs">
+        <button class="fs-tab active" onclick="upSetDest('lfs',this)" id="tab-lfs-up">Internal FS</button>
+        <button class="fs-tab" onclick="upSetDest('sd',this)">SD Card</button>
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="upload-zone" id="up-dropzone">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:32px;height:32px;color:var(--text-dim);margin-bottom:8px"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+          <p>Drag &amp; drop files here, or click to browse</p>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:4px">Multiple files supported</p><br>
+          <button class="btn btn-accent" onclick="document.getElementById('up-files').click()" style="display:inline-flex;align-items:center;gap:6px">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+            Choose Files
+          </button>
+          <input id="up-files" type="file" multiple style="display:none" onchange="upFilesSelected(this.files)">
+        </div>
+        <div id="up-queue" class="file-queue"></div>
+        <div class="upload-summary" id="up-summary" style="display:none">
+          <span id="up-summary-text"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="up-clear" onclick="upClearAll()" style="padding:4px 10px;font-size:11px">Clear</button>
+            <button class="btn btn-accent" id="up-btn" onclick="upStart()" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;font-size:12px">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+              Upload All
+            </button>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ FORMAT ═══ -->
+  <div id="view-format" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">Format Storage</div>
+        <div class="page-subtitle">Erase all files from internal storage</div>
+      </div>
+      <div class="card danger-zone"><div class="card-body" style="text-align:center;padding:40px 24px">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:48px;height:48px;color:var(--red);margin-bottom:16px;opacity:0.7"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px"><strong style="color:var(--red)">Warning:</strong> This permanently deletes all files on internal storage.</p>
+        <p style="font-size:11px;color:var(--text-dim);margin-bottom:24px">This action cannot be undone.</p>
+        <div id="fmt-status" style="margin-bottom:12px;font-size:12px;color:var(--text-dim)"></div>
+        <button id="fmt-btn" class="btn btn-danger" style="font-size:13px;padding:10px 24px" onclick="fmtConfirm()">Format Storage</button>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ UPDATE ═══ -->
+  <div id="view-update" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">Firmware Update</div>
+        <div class="page-subtitle">Flash new firmware to the ESP32</div>
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="upload-zone">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:32px;height:32px;color:var(--text-dim);margin-bottom:8px"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+          <p>Select <strong style="color:var(--text-secondary)">fwupdate.bin</strong> to flash</p>
+          <p>Magic byte 0xE9 required</p><br>
+          <button id="ota-sel-btn" class="btn btn-accent" onclick="document.getElementById('ota-file').click()">Choose File</button>
+          <input id="ota-file" type="file" accept=".bin" style="display:none" onchange="otaFileSelected()">
+        </div>
+        <div id="ota-meta"></div>
+        <div class="progress-bar" id="ota-bar" style="display:none;margin-top:12px"><div class="progress-fill" id="ota-fill"></div></div>
+        <div id="ota-status" style="margin-top:12px;font-size:12px;color:var(--text-dim)"></div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end">
+          <button id="ota-flash-btn" class="btn btn-accent" style="display:none" onclick="otaFlash()">Flash Firmware</button>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ CONFIG ═══ -->
+  <div id="view-config" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">Config Editor</div>
+        <div class="page-subtitle">Network &amp; system configuration</div>
+      </div>
+      <form id="cfg-form">
+        <div class="card">
+          <div class="card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>Access Point</div>
+          <table class="form-table">
+            <tr><td>AP SSID</td><td><input name="ap_ssid"></td></tr>
+            <tr><td>AP Password</td><td><input name="ap_pass" type="password"></td></tr>
+            <tr><td>AP IP Address</td><td><input name="web_ip"></td></tr>
+            <tr><td>Subnet Mask</td><td><input name="subnet"></td></tr>
+            <tr><td>Enable AP</td><td><input type="checkbox" name="useap"> <span style="font-size:10px;color:var(--text-dim)">Disable only if STA is configured</span></td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h8v2H6zm4-4h8v2h-8z"/></svg>Web Server</div>
+          <table class="form-table">
+            <tr><td>Port</td><td><input name="web_port" type="number" min="1" max="65535"></td></tr>
+            <tr><td>Enable Cache</td><td><input type="checkbox" name="cache_enabled"></td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>WiFi Connection</div>
+          <table class="form-table">
+            <tr><td>WiFi SSID</td><td><input name="wifi_ssid"></td></tr>
+            <tr><td>WiFi Password</td><td><input name="wifi_pass" type="password"></td></tr>
+            <tr><td>Hostname</td><td><input name="wifi_host"></td></tr>
+            <tr><td>Connect WiFi</td><td><input type="checkbox" name="usewifi"></td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93C9.2 7.75 8.45 7 7.5 7S5.8 7.75 5.8 8.5c0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95 0 1.24 1.01 2.25 2.25 2.25S16 21.24 16 20c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-6z"/></svg>Auto USB</div>
+          <table class="form-table">
+            <tr><td>Wait Time (ms)</td><td><input name="usbwait"></td></tr>
+          </table>
+        </div>
+
+        <div class="save-row">
+          <span id="restart-warn"><svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px;flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>Restart required</span>
+          <span id="confirm-row">
+            <span style="color:var(--amber);font-size:11px">Save and restart?</span>
+            <button type="button" class="btn" style="padding:4px 10px;font-size:11px" onclick="cfgCancelSave()">Cancel</button>
+            <button type="button" class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="cfgDoSave(true)">Restart &amp; Save</button>
+          </span>
+          <button type="button" class="btn btn-accent" id="cfg-save-btn" onclick="cfgHandleSave()">Save Configuration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ REBOOT ═══ -->
+  <div id="view-reboot" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div class="page-title">Reboot ESP</div>
+        <div class="page-subtitle">Restart the ESP32-S3 board</div>
+      </div>
+      <div class="reboot-card" id="rb-card">
+        <div class="reboot-body">
+          <div class="reboot-icon"><svg viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></div>
+          <div id="rb-idle">
+            <div class="reboot-title">Reboot ESP32</div>
+            <div class="reboot-desc">The board will restart and the panel will be unavailable for a few seconds.</div>
+            <div class="btn-row"><button class="btn btn-danger" onclick="rbShowConfirm()">Reboot ESP</button></div>
+          </div>
+          <div id="rb-confirm">
+            <div class="confirm-badge"><svg viewBox="0 0 24 24" fill="currentColor" style="width:11px;height:11px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>Are you sure?</div>
+            <div class="reboot-title">Confirm Reboot</div>
+            <div class="reboot-desc">This will immediately restart the ESP32-S3. Any active connections will be dropped.</div>
+            <div class="btn-row">
+              <button class="btn" onclick="rbShowIdle()">Cancel</button>
+              <button class="btn btn-danger" onclick="rbDoReboot()">Yes, Reboot Now</button>
+            </div>
+          </div>
+          <div id="rb-rebooting">
+            <div class="rb-countdown" id="rb-count">5</div>
+            <div class="rb-count-label" id="rb-count-label">seconds until reconnect</div>
+            <div class="reboot-title" style="color:var(--red)">Rebooting…</div>
+            <div class="reboot-desc">Do not power off. Waiting for board to come back online…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+var _currentView = 'info';
+var _viewInited  = {};
+
+function nav(id, linkEl) {
+  document.querySelectorAll('.sidenav a').forEach(function(a){ a.classList.remove('active'); });
+  if (linkEl) linkEl.classList.add('active');
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+  document.getElementById('view-' + id).classList.add('active');
+  _currentView = id;
+  // Initialise page on first visit, re-enter on every subsequent visit
+  var alreadyInited = _viewInited[id];
+  if (!alreadyInited) {
+    _viewInited[id] = true;
+    var init = window['init_' + id];
+    if (init) init();
+  } else {
+    var show = window['show_' + id];
+    if (show) show();
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SHARED UTILITIES
+// ═══════════════════════════════════════════════════════════════════
+var _fsName = 'Internal FS';
+
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  var k=1024, s=['B','KB','MB','GB'], i=Math.floor(Math.log(b)/Math.log(k));
+  return parseFloat((b/Math.pow(k,i)).toFixed(2))+' '+s[i];
+}
+
+function showToast(type, title, sub) {
+  var t = document.getElementById('toast');
+  t.className = type;
+  var icons = {
+    success: '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>',
+    error:   '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>',
+    info:    '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>'
+  };
+  t.querySelector('.ti svg').innerHTML = icons[type] || icons.info;
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-sub').textContent   = sub || '';
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+
+function showRebootOverlay(desc, seconds) {
+  document.getElementById('reboot-overlay').classList.add('show');
+  if (desc) document.getElementById('ro-desc').textContent = desc;
+  var n = seconds || 5;
+  var el = document.getElementById('ro-n');
+  var lbl = document.getElementById('ro-label');
+  el.textContent = n;
+  var iv = setInterval(function() {
+    n--; el.textContent = n;
+    if (n <= 0) {
+      clearInterval(iv);
+      el.textContent = '…'; lbl.textContent = 'waiting for board';
+      pollUntilAlive();
+    }
+  }, 1000);
+}
+
+function pollUntilAlive() {
+  fetch('/api/status', { cache: 'no-store' })
+    .then(function(r) { if (r.ok) window.location.reload(); else setTimeout(pollUntilAlive, 1000); })
+    .catch(function(){ setTimeout(pollUntilAlive, 1000); });
+}
+
+// Fetch fsName from status on load
+fetch('/api/status').then(function(r){ return r.json(); }).then(function(d) {
+  _fsName = d.fsName || 'Internal FS';
+  document.getElementById('tab-lfs').textContent    = _fsName;
+  document.getElementById('tab-lfs-up').textContent = _fsName;
+  document.getElementById('nav-status').textContent = 'Online  /  ' + d.chip;
+}).catch(function(){});
+
+// Auto-init info on load
+_viewInited['info'] = true;
+
+// ═══════════════════════════════════════════════════════════════════
+//  INFO PAGE
+// ═══════════════════════════════════════════════════════════════════
+(function initInfo() {
+  function bar(color, p) {
+    return '<div class="resource-bar"><div class="resource-fill ' + color + '" style="width:' + p + '%"></div></div>';
+  }
+  function kb(b) { return Math.round(b / 1024) + ' KB'; }
+
+  fetch('/api/status').then(function(r){ return r.json(); }).then(function(d) {
+    var ramPct = d.heapUsedPct || 0;
+    var fsPct  = d.fsUsedPct  || 0;
+    var html   = '';
+
+    html += '<div class="stat-card"><div class="stat-label">SDK Version</div><div class="stat-value accent" style="font-size:14px">' + d.sdkVer + '</div><div class="stat-sub">Sketch: ' + d.sketchSize + '</div></div>';
+    html += '<div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value green">' + d.cpuMhz + ' MHz</div><div class="stat-sub">' + d.chip + '  /  ' + d.cores + ' cores</div></div>';
+    html += '<div class="stat-card"><div class="stat-label">Flash</div><div class="stat-value">' + d.flashSize + '</div><div class="stat-sub">' + d.flashMhz + ' MHz  /  QIO</div></div>';
+    html += '<div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value">' + d.uptime + 's</div><div class="stat-sub">Free sketch: ' + d.sketchFree + '</div></div>';
+    html += '<div class="resource-card"><div class="resource-header"><div class="resource-title">RAM</div><div class="resource-pct">' + ramPct + '% used</div></div>' + bar('blue', ramPct) + '<div class="resource-stats"><div><div class="resource-stat-label">Total</div><div class="resource-stat-val">' + kb(d.heapTotal) + '</div></div><div><div class="resource-stat-label">Free</div><div class="resource-stat-val green">' + kb(d.heap) + '</div></div><div><div class="resource-stat-label">Max Alloc</div><div class="resource-stat-val accent">' + kb(d.heapMax) + '</div></div></div></div>';
+    var fsFree = d.fsTotal && d.fsUsed ? kb(d.fsTotal - d.fsUsed) : '—';
+    html += '<div class="resource-card"><div class="resource-header"><div class="resource-title">' + (d.fsName || 'Internal FS') + '</div><div class="resource-pct">' + fsPct + '% used</div></div>' + bar('amber', fsPct) + '<div class="resource-stats"><div><div class="resource-stat-label">Total</div><div class="resource-stat-val">' + d.fsTotalStr + '</div></div><div><div class="resource-stat-label">Free</div><div class="resource-stat-val green">' + fsFree + '</div></div><div><div class="resource-stat-label">Used</div><div class="resource-stat-val amber">' + d.fsUsedStr + '</div></div></div></div>';
+    if (d.sdEnabled) {
+      var sdPct  = d.sdUsedPct || 0;
+      var sdFree = d.sdTotal && d.sdUsed ? Math.round((d.sdTotal - d.sdUsed) / 1048576 * 10) / 10 + ' MB' : '—';
+      html += '<div class="resource-card full"><div class="resource-header"><div class="resource-title">SD Card</div><div class="resource-pct">' + sdPct + '% used</div></div>' + bar('green', sdPct) + '<div class="resource-stats"><div><div class="resource-stat-label">Total</div><div class="resource-stat-val">' + d.sdTotalStr + '</div></div><div><div class="resource-stat-label">Free</div><div class="resource-stat-val green">' + sdFree + '</div></div><div><div class="resource-stat-label">Used</div><div class="resource-stat-val amber">' + d.sdUsedStr + '</div></div></div></div>';
+    }
+    html += '<div class="list-card"><div class="list-card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 2H7v2H5v2H3v2h2v2H3v2h2v2H3v2h2v2h2v2h2v-2h2v2h2v-2h2v2h2v-2h2v-2h2v-2h-2v-2h2v-2h-2v-2h2V8h-2V6h-2V4h-2V2h-2v2h-2V2H9zm0 4h6v2h2v6h-2v2H9v-2H7V8h2V6zm2 4v4h2v-4h-2z"/></svg>Board</div>'
+         + '<div class="kv-row"><span class="kv-key">MCU</span><span class="kv-val green">' + d.chip + '</span></div>'
+         + '<div class="kv-row"><span class="kv-key">Cores</span><span class="kv-val">' + d.cores + '</span></div>'
+         + '<div class="kv-row"><span class="kv-key">CPU Freq</span><span class="kv-val accent">' + d.cpuMhz + ' MHz</span></div>'
+         + '<div class="kv-row"><span class="kv-key">Flash</span><span class="kv-val">' + d.flashSize + '</span></div>'
+         + '</div>';
+    html += '<div class="list-card"><div class="list-card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>Network</div>'
+         + '<div class="kv-row"><span class="kv-key">AP IP</span><span class="kv-val accent">' + (d.apRunning && d.apIp ? d.apIp : '—') + '</span></div>'
+         + '<div class="kv-row"><span class="kv-key">STA IP</span><span class="kv-val">' + (d.staConnected ? d.staIp : '—') + '</span></div>'
+         + '<div class="kv-row"><span class="kv-key">RSSI</span><span class="kv-val">' + (d.staConnected ? d.staRssi + ' dBm' : '—') + '</span></div>'
+         + '<div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">' + (d.staConnected ? '<span class="badge-online">Online</span>' : '<span class="badge-offline">AP Only</span>') + '</span></div>'
+         + '</div>';
+    html += '<div class="list-card full"><div class="list-card-header"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 14H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Sketch</div>'
+         + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr">'
+         + '<div class="kv-row" style="border-right:1px solid var(--border);border-bottom:none"><span class="kv-key">Size</span><span class="kv-val">' + d.sketchSize + '</span></div>'
+         + '<div class="kv-row" style="border-right:1px solid var(--border);border-bottom:none"><span class="kv-key">Free</span><span class="kv-val green">' + d.sketchFree + '</span></div>'
+         + '<div class="kv-row" style="border-bottom:none"><span class="kv-key">SDK</span><span class="kv-val accent">' + d.sdkVer + '</span></div>'
+         + '</div><div class="hash-row"><div class="hash-label">Sketch MD5</div><div class="hash-val">' + d.sketchHash + '</div></div></div>';
+    document.getElementById('dash').innerHTML = html;
+  }).catch(function(e) {
+    document.getElementById('dash').innerHTML = '<div class="stat-card full" style="color:var(--red);text-align:center;padding:20px">Failed — ' + e.message + '</div>';
+  });
+}());
+
+// ═══════════════════════════════════════════════════════════════════
+//  FILE MANAGER
+// ═══════════════════════════════════════════════════════════════════
+var fmFs   = 'lfs';
+var fmPath = '/';
+var ICO_FILE   = '<svg class="entry-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 14H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>';
+var ICO_FOLDER = '<svg class="entry-icon" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent)"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>';
+var ICO_DL     = '<svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+var ICO_DEL    = '<svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+var ICO_RENAME = '<svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+var ICO_MOVE   = '<svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px"><path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/></svg>';
+var fmSelected   = [];
+var fmLastSelIdx = -1;
+var fmSort       = {col:'name', dir:1};
+var fmMvPath = '', fmMvIsDir = false, fmMvBrowsePath = '/';
+
+window.init_fileman = function() { fmLoad(); };
+window.show_fileman = function() { fmLoad(); };
+
+function fmExtClass(n) { var e=n.split('.').pop().toLowerCase(); return e==='bin'?'ext-bin':e==='html'?'ext-html':e==='js'?'ext-js':''; }
+function fmFullPath(n) { var p=fmPath.endsWith('/')?fmPath:fmPath+'/'; return p+n; }
+
+function fmSwitchFs(fs, btn) {
+  fmFs = fs; fmPath = '/';
+  document.querySelectorAll('.fs-tab').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  fmLoad();
+}
+function fmNavigate(p) { fmPath = p; fmLoad(); }
+
+function fmRenderBreadcrumb() {
+  var parts = fmPath.split('/').filter(function(p){ return p.length; });
+  var html = '<span class="breadcrumb-part ' + (!parts.length?'current':'') + '" onclick="fmNavigate(\'/\')">root</span>';
+  var built = '';
+  parts.forEach(function(p, i) {
+    built += '/' + p;
+    var cur = i === parts.length - 1;
+    var s = built;
+    html += '<span class="breadcrumb-sep">›</span><span class="breadcrumb-part' + (cur?' current':'') + '" onclick="fmNavigate(\'' + s + '\')">' + p + '</span>';
+  });
+  document.getElementById('fm-breadcrumb').innerHTML = html;
+}
+
+function fmLoad() {
+  fmRenderBreadcrumb();
+  fmRenderSortHeaders();
+  fmSelected = []; fmLastSelIdx = -1; fmUpdateSelBtn();
+  document.getElementById('fm-body').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Loading…</td></tr>';
+  fetch('/api/files?fs=' + fmFs + '&path=' + encodeURIComponent(fmPath))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var entries = (d.files || []).sort(function(a,b){
+        if(a.isDir!==b.isDir) return a.isDir?-1:1;
+        if(fmSort.col==='size') return fmSort.dir*((a.size||0)-(b.size||0));
+        return fmSort.dir*a.name.localeCompare(b.name);
+      });
+      var fc = entries.filter(function(e){ return !e.isDir; }).length;
+      var dc = entries.filter(function(e){ return  e.isDir; }).length;
+      document.getElementById('fm-sub').textContent = (fmFs==='sd'?'SD Card':_fsName) + '  /  ' + dc + ' folder' + (dc!==1?'s':'') + ',  ' + fc + ' file' + (fc!==1?'s':'');
+      if (!entries.length) {
+        document.getElementById('fm-body').innerHTML='<tr><td colspan="6"><div class="fm-empty"><svg viewBox="0 0 24 24" fill="currentColor" style="width:30px;height:30px;opacity:0.15"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z"/></svg><span>This folder is empty</span></div></td></tr>';
+        return;
+      }
+      var out = '';
+      entries.forEach(function(e, i) {
+        var ip=fmFullPath(e.name), trId='tr-'+i, btnId='db-'+i, cfmId='dc-'+i;
+        out += '<tr id="'+trId+'">';
+        out += '<td style="text-align:center"><input type="checkbox" class="fm-sel-cb" data-path="'+ip.replace(/'/g,"\\'")+'" data-idx="'+i+'" onclick="fmToggleSel(this,event)"></td>';
+        if (e.isDir) {
+          out += '<td id="fm-nc-'+i+'"><div class="entry-name folder" onclick="fmNavigate(\''+ip.replace(/'/g,"\\'")+'\')">' + ICO_FOLDER + e.name + '</div></td><td style="color:var(--text-dim)">—</td><td style="text-align:center"><button class="btn" style="padding:6px 10px;opacity:0.3;cursor:default" disabled>' + ICO_DL + '</button></td>';
+        } else {
+          out += '<td id="fm-nc-'+i+'"><div class="entry-name '+fmExtClass(e.name)+'">' + ICO_FILE + e.name + '</div></td><td style="color:var(--text-dim)">' + e.sizeStr + '</td><td style="text-align:center"><a href="/api/download?fs='+fmFs+'&path='+encodeURIComponent(ip)+'" download><button class="btn btn-success" style="padding:6px 10px">'+ICO_DL+'</button></a></td>';
+        }
+        var safeNa=e.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;'), safePa=ip.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+        out += '<td style="text-align:center;white-space:nowrap">';
+        out += '<button class="btn" style="padding:4px 7px" title="Rename" data-idx="'+i+'" data-name="'+safeNa+'" data-path="'+safePa+'" onclick="fmStartRename(this)">'+ICO_RENAME+'</button> ';
+        out += '<button class="btn" style="padding:4px 7px" title="Move / Copy" data-path="'+safePa+'" data-isdir="'+(e.isDir?1:0)+'" onclick="fmShowMvDlg(this)">'+ICO_MOVE+'</button></td>';
+        out += '<td style="text-align:center"><button id="'+btnId+'" class="btn btn-danger" style="padding:6px 10px" onclick="fmShowDel(\''+ip.replace(/'/g,"\\'")+'\',\''+cfmId+'\',\''+btnId+'\')">'+ICO_DEL+'</button>';
+        out += '<span id="'+cfmId+'" class="confirm-wrap" data-btn="'+btnId+'"><span style="color:var(--red);font-size:10px">'+(e.isDir?'Delete folder + contents?':'Delete?')+'</span>';
+        out += '<button class="btn" style="padding:3px 8px;font-size:10px" onclick="fmCancelDel(\''+cfmId+'\',\''+btnId+'\')">Cancel</button>';
+        out += '<button class="btn btn-danger" style="padding:3px 8px;font-size:10px" onclick="fmDoDelete(\''+ip.replace(/'/g,"\\'")+'\',\''+cfmId+'\',\''+btnId+'\',\''+trId+'\')">Confirm</button></span></td></tr>';
+      });
+      document.getElementById('fm-body').innerHTML = out;
+    }).catch(function(e){ document.getElementById('fm-body').innerHTML='<tr><td colspan="6" style="color:var(--red);text-align:center;padding:20px">Error: '+e.message+'</td></tr>'; });
+}
+
+function fmShowDel(p,cfmId,btnId) {
+  document.querySelectorAll('.confirm-wrap.show').forEach(function(r){ r.classList.remove('show'); var b=r.getAttribute('data-btn'); if(b)document.getElementById(b).style.display=''; });
+  document.getElementById(btnId).style.display='none'; document.getElementById(cfmId).classList.add('show');
+}
+function fmCancelDel(cfmId,btnId){ document.getElementById(cfmId).classList.remove('show'); document.getElementById(btnId).style.display=''; }
+function fmToggleSel(cb, evt) {
+  var p=cb.getAttribute('data-path'), tr=cb.closest('tr');
+  var idx=parseInt(cb.getAttribute('data-idx'),10);
+  if(evt&&evt.shiftKey&&fmLastSelIdx>=0&&idx!==fmLastSelIdx) {
+    var lo=Math.min(fmLastSelIdx,idx), hi=Math.max(fmLastSelIdx,idx);
+    document.querySelectorAll('#fm-body .fm-sel-cb').forEach(function(c){
+      var ci=parseInt(c.getAttribute('data-idx'),10);
+      if(ci>=lo&&ci<=hi){
+        c.checked=cb.checked;
+        var cp=c.getAttribute('data-path'), ct=c.closest('tr');
+        if(cb.checked){if(fmSelected.indexOf(cp)<0)fmSelected.push(cp);ct.classList.add('fm-row-sel');}
+        else{fmSelected=fmSelected.filter(function(x){return x!==cp;});ct.classList.remove('fm-row-sel');}
+      }
+    });
+  } else {
+    if(cb.checked){if(fmSelected.indexOf(p)<0)fmSelected.push(p);tr.classList.add('fm-row-sel');}
+    else{fmSelected=fmSelected.filter(function(x){return x!==p;});tr.classList.remove('fm-row-sel');}
+  }
+  if(evt&&!evt.shiftKey) fmLastSelIdx=idx;
+  fmUpdateSelBtn();
+}
+function fmToggleSelAll(cb) {
+  fmLastSelIdx=-1;
+  var checked=cb.checked;
+  document.querySelectorAll('#fm-body .fm-sel-cb').forEach(function(c){c.checked=checked;fmToggleSel(c);});
+}
+function fmUpdateSelBtn() {
+  var n=fmSelected.length, btn=document.getElementById('fm-del-sel-btn');
+  if(!btn)return;
+  var cfm=document.getElementById('fm-del-sel-cfm');
+  if(cfm)cfm.classList.remove('show');
+  var all=document.querySelectorAll('#fm-body .fm-sel-cb');
+  var countEl=document.getElementById('fm-sel-count');
+  if(n>0){
+    btn.style.display='flex';
+    document.getElementById('fm-del-sel-lbl').textContent='Delete selected ('+n+')';
+    if(countEl){countEl.textContent=n+' of '+all.length+' selected';countEl.classList.add('show');}
+  } else {
+    btn.style.display='none';
+    if(countEl)countEl.classList.remove('show');
+  }
+  var allCb=document.getElementById('fm-cb-all');
+  if(allCb&&all.length){allCb.checked=n===all.length;allCb.indeterminate=n>0&&n<all.length;}
+}
+function fmAskDelSel() {
+  var n=fmSelected.length; if(!n)return;
+  document.getElementById('fm-del-sel-txt').textContent='Delete '+n+' item'+(n!==1?'s':'')+'?';
+  document.getElementById('fm-del-sel-cfm').classList.add('show');
+  document.getElementById('fm-del-sel-btn').style.display='none';
+}
+function fmCancelDelSel() {
+  document.getElementById('fm-del-sel-cfm').classList.remove('show');
+  if(fmSelected.length)document.getElementById('fm-del-sel-btn').style.display='flex';
+}
+function fmDoDeleteSelected() {
+  fmCancelDelSel();
+  var paths=fmSelected.slice(),total=paths.length,failed=0;
+  function next(i){
+    if(i>=total){fmSelected=[];fmUpdateSelBtn();fmLoad();
+      if(failed)showToast('error','Some deletions failed',failed+' of '+total+' failed');
+      else showToast('success','Deleted',total+' item'+(total!==1?'s':'')+' deleted');return;}
+    fetch('/api/delete?fs='+fmFs+'&path='+encodeURIComponent(paths[i]),{method:'DELETE'})
+      .then(function(r){return r.json();}).then(function(d){if(!d.ok)failed++;next(i+1);})
+      .catch(function(){failed++;next(i+1);});
+  }
+  next(0);
+}
+function fmDoDelete(p,cfmId,btnId,trId) {
+  fmCancelDel(cfmId,btnId);
+  fetch('/api/delete?fs='+fmFs+'&path='+encodeURIComponent(p),{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){var tr=document.getElementById(trId);if(tr)tr.remove();showToast('success','Deleted',p);}
+    else showToast('error','Delete failed',d.error||'');
+  }).catch(function(){ showToast('error','Delete failed','network error'); });
+}
+function fmStartRename(btn) {
+  var i=parseInt(btn.getAttribute('data-idx'),10);
+  var name=btn.getAttribute('data-name'), ip=btn.getAttribute('data-path');
+  var cell=document.getElementById('fm-nc-'+i);
+  if(!cell)return;
+  cell.dataset.orig=cell.innerHTML;
+  var inp=document.createElement('input');
+  inp.id='fm-rn-inp'; inp.className='fm-rename-inp'; inp.value=name;
+  function detach(){inp.removeEventListener('blur',onBlur);}
+  function onBlur(){fmCancelRename(i);}
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();detach();fmCommitRename(ip,i);}
+    if(e.key==='Escape'){e.preventDefault();detach();fmCancelRename(i);}
+  });
+  inp.addEventListener('blur',onBlur);
+  cell.innerHTML=''; cell.appendChild(inp);
+  inp.focus(); inp.select();
+}
+function fmCancelRename(i) {
+  var cell=document.getElementById('fm-nc-'+i);
+  if(cell&&cell.dataset.orig)cell.innerHTML=cell.dataset.orig;
+}
+function fmCommitRename(oldPath,i) {
+  var inp=document.getElementById('fm-rn-inp'); if(!inp)return;
+  var newName=inp.value.trim(); if(!newName){fmCancelRename(i);return;}
+  var dir=oldPath.substring(0,oldPath.lastIndexOf('/')+1);
+  var newPath=dir+newName;
+  if(newPath===oldPath){fmCancelRename(i);return;}
+  var fd=new FormData(); fd.append('fs',fmFs); fd.append('from',oldPath); fd.append('to',newPath);
+  fetch('/api/rename',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){showToast('success','Renamed',newName);fmLoad();}
+      else{showToast('error','Rename failed',d.error||'');fmCancelRename(i);}
+    })
+    .catch(function(){showToast('error','Rename failed','network error');fmCancelRename(i);});
+}
+function fmShowMvDlg(btn) {
+  fmMvPath=btn.getAttribute('data-path');
+  fmMvIsDir=btn.getAttribute('data-isdir')==='1';
+  fmMvBrowsePath=fmPath;
+  document.getElementById('fm-mv-src').textContent=fmMvPath;
+  document.getElementById('fm-copy-btn').style.display=fmMvIsDir?'none':'';
+  document.getElementById('fm-mv-overlay').style.display='flex';
+  fmMvLoadFolders();
+}
+function fmCloseMvDlg(){document.getElementById('fm-mv-overlay').style.display='none';}
+function fmMvLoadFolders() {
+  document.getElementById('fm-mv-dest-path').textContent=fmMvBrowsePath;
+  var list=document.getElementById('fm-mv-folder-list');
+  list.innerHTML='<div style="color:var(--text-dim);font-size:11px;padding:10px;text-align:center">Loading…</div>';
+  fetch('/api/files?fs='+fmFs+'&path='+encodeURIComponent(fmMvBrowsePath))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var folders=(d.files||[]).filter(function(f){return f.isDir;});
+      var html='';
+      if(fmMvBrowsePath!=='/'){
+        var par=fmMvBrowsePath.substring(0,fmMvBrowsePath.lastIndexOf('/'))||'/';
+        html+='<div class="fm-mv-item up" onclick="fmMvNav(\''+par.replace(/'/g,"\\'")+'\')">'+ICO_FOLDER+' ..</div>';
+      }
+      folders.forEach(function(f){
+        var p=(fmMvBrowsePath==='/'?'':fmMvBrowsePath)+'/'+f.name;
+        html+='<div class="fm-mv-item" onclick="fmMvNav(\''+p.replace(/'/g,"\\'")+'\')">'+ICO_FOLDER+f.name+'</div>';
+      });
+      if(!html)html='<div style="color:var(--text-dim);font-size:11px;padding:10px;text-align:center">No subfolders</div>';
+      list.innerHTML=html;
+    })
+    .catch(function(){list.innerHTML='<div style="color:var(--red);font-size:11px;padding:10px;text-align:center">Failed to load</div>';});
+}
+function fmMvNav(path){fmMvBrowsePath=path;fmMvLoadFolders();}
+function fmMvGetTo(){
+  var base=fmMvBrowsePath==='/'?'':fmMvBrowsePath;
+  return base+'/'+fmMvPath.substring(fmMvPath.lastIndexOf('/')+1);
+}
+function fmDoMove(){
+  var to=fmMvGetTo();
+  if(to===fmMvPath){showToast('info','Already here','File is already in this folder');return;}
+  fmCloseMvDlg();
+  var fd=new FormData(); fd.append('fs',fmFs); fd.append('from',fmMvPath); fd.append('to',to);
+  fetch('/api/rename',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){showToast('success','Moved',to);fmLoad();}
+      else showToast('error','Move failed',d.error||'');
+    })
+    .catch(function(){showToast('error','Move failed','network error');});
+}
+function fmDoCopy(){
+  var to=fmMvGetTo();
+  fmCloseMvDlg();
+  var fd=new FormData(); fd.append('fs',fmFs); fd.append('from',fmMvPath); fd.append('to',to);
+  fetch('/api/copy',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){showToast('success','Copied',to);fmLoad();}
+      else showToast('error','Copy failed',d.error||'');
+    })
+    .catch(function(){showToast('error','Copy failed','network error');});
+}
+function fmSetSort(col) {
+  if(fmSort.col===col) fmSort.dir*=-1; else{fmSort.col=col;fmSort.dir=1;}
+  fmLoad();
+}
+function fmRenderSortHeaders() {
+  ['name','size'].forEach(function(col){
+    var el=document.getElementById('fm-sort-'+col);
+    if(!el)return;
+    if(fmSort.col===col){el.textContent=fmSort.dir>0?'↑':'↓';el.classList.add('on');}
+    else{el.textContent='↕';el.classList.remove('on');}
+  });
+}
+document.addEventListener('keydown',function(e){
+  if(_currentView!=='fileman')return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='a'&&document.activeElement.tagName!=='INPUT'){
+    e.preventDefault();
+    var allCb=document.getElementById('fm-cb-all');
+    if(allCb){allCb.checked=true;fmToggleSelAll(allCb);}
+  }
+  if(e.key==='Delete'&&fmSelected.length&&document.activeElement.tagName!=='INPUT'){
+    e.preventDefault(); fmAskDelSel();
+  }
+});
+function fmToggleMkdir() {
+  var row=document.getElementById('fm-mkdir-row'),inp=document.getElementById('fm-mkdir-input');
+  if(row.classList.contains('show')){row.classList.remove('show');inp.value='';}else{row.classList.add('show');setTimeout(function(){inp.focus();},50);}
+}
+function fmDoMkdir() {
+  var name=document.getElementById('fm-mkdir-input').value.trim(); if(!name)return;
+  var p=fmFullPath(name),fd=new FormData(); fd.append('path',p); fd.append('fs',fmFs);
+  fetch('/api/mkdir',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){fmToggleMkdir();showToast('success','Folder created',p);fmLoad();}
+    else showToast('error','Failed',d.error||'');
+  }).catch(function(){showToast('error','Failed','network error');});
+}
+
+var fmUpOverlay=null;
+function fmShowUpOverlay(total) {
+  var el=document.createElement('div');
+  el.id='fm-up-overlay';el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center;';
+  el.innerHTML='<div class="up-overlay-inner"><div style="font-family:\'Syne\',sans-serif;font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Uploading files</div><div id="fm-up-sub" style="font-size:11px;color:var(--text-dim);margin-bottom:16px">0 / '+total+' complete</div><div id="fm-up-fname" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div><div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:6px"><div id="fm-up-fill" style="height:100%;background:var(--accent);border-radius:2px;width:0;transition:width 0.15s ease"></div></div><div id="fm-up-pct" style="font-size:10px;color:var(--text-dim);text-align:right">0%</div></div>';
+  document.body.appendChild(el); fmUpOverlay=el;
+}
+function fmUpdUpOverlay(done,total,fname,pct) {
+  if(!fmUpOverlay)return;
+  document.getElementById('fm-up-sub').textContent=done+' / '+total+' complete';
+  document.getElementById('fm-up-fname').textContent=fname;
+  document.getElementById('fm-up-fill').style.width=pct+'%';
+  document.getElementById('fm-up-pct').textContent=pct+'%';
+}
+function fmHideUpOverlay(){ if(fmUpOverlay){fmUpOverlay.remove();fmUpOverlay=null;} }
+
+function fmUploadFiles(files) {
+  if(!files||!files.length)return;
+  var arr=Array.from(files),total=arr.length,done=0;
+  document.getElementById('fm-upinput').value='';
+  fmShowUpOverlay(total);
+  function next(idx) {
+    if(idx>=total){fmHideUpOverlay();fmLoad();showToast('success','Upload complete',total+' file'+(total!==1?'s':'')+' uploaded');return;}
+    var f=arr[idx]; fmUpdUpOverlay(done,total,f.name,0);
+    var fd=new FormData(); fd.append('file',f,f.name);
+    var xhr=new XMLHttpRequest(); xhr.open('POST','/api/upload/'+fmFs+fmPath);
+    xhr.upload.onprogress=function(e){if(e.lengthComputable)fmUpdUpOverlay(done,total,f.name,Math.round(e.loaded/e.total*100));};
+    xhr.onload=function(){done++;fmUpdUpOverlay(done,total,f.name,100);next(idx+1);};
+    xhr.onerror=function(){showToast('error','Upload failed',f.name);done++;next(idx+1);};
+    xhr.send(fd);
+  }
+  next(0);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPLOAD PAGE
+// ═══════════════════════════════════════════════════════════════════
+var upDest='lfs', upList=[], upUploading=false;
+window.init_upload = function(){};
+
+function upSetDest(d,btn) {
+  upDest=d;
+  document.querySelectorAll('.fs-tab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
+function upFilesSelected(files) {
+  if(!files||!files.length)return;
+  for(var i=0;i<files.length;i++){
+    var exists=false;
+    for(var j=0;j<upList.length;j++){if(upList[j].file.name===files[i].name){exists=true;break;}}
+    if(!exists)upList.push({file:files[i],status:'waiting',pct:0});
+  }
+  document.getElementById('up-files').value='';
+  upRender();
+}
+function upRender() {
+  if(!upList.length){document.getElementById('up-queue').innerHTML='';document.getElementById('up-summary').style.display='none';return;}
+  var html='';
+  upList.forEach(function(e,i){
+    var cls=e.status==='done'?'done':e.status==='error'?'error':e.status==='uploading'?'active':'';
+    var stxt=e.status==='done'?'✓ Done':e.status==='error'?'✕ Failed':e.status==='uploading'?'Uploading… '+e.pct+'%':'Waiting';
+    var scls=e.status==='waiting'?'file-item-status waiting':'file-item-status';
+    html+='<div class="file-item '+cls+'" id="ufi-'+i+'"><div class="file-item-header"><span class="file-item-name">'+e.file.name+'</span><span class="'+scls+'">'+stxt+'</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="file-bar" style="flex:1"><div class="file-fill" id="ufill-'+i+'" style="width:'+e.pct+'%"></div></div><span class="file-item-size">'+fmtBytes(e.file.size)+'</span></div></div>';
+  });
+  document.getElementById('up-queue').innerHTML=html;
+  var done=upList.filter(function(e){return e.status==='done';}).length;
+  var total=upList.length;
+  var totalBytes=upList.reduce(function(s,e){return s+e.file.size;},0);
+  document.getElementById('up-summary').style.display='flex';
+  document.getElementById('up-summary-text').textContent=done+' / '+total+' files  ·  '+fmtBytes(totalBytes)+' total';
+  document.getElementById('up-subtitle').textContent=total+' file'+(total!==1?'s':'')+' queued for '+(upDest==='sd'?'SD Card':_fsName);
+  var allDone=upList.every(function(e){return e.status==='done'||e.status==='error';});
+  document.getElementById('up-btn').style.display=(upUploading||allDone)?'none':'inline-flex';
+  document.getElementById('up-clear').textContent=allDone?'Clear':'Clear All';
+}
+function upClearAll(){ if(upUploading)return; upList=[]; upRender(); document.getElementById('up-subtitle').textContent='Select a destination and choose files'; }
+function upStart(){
+  if(upUploading)return; upUploading=true; document.getElementById('up-btn').style.display='none'; upNext(0);
+}
+function upNext(i){
+  while(i<upList.length&&upList[i].status!=='waiting')i++;
+  if(i>=upList.length){upUploading=false;upRender();return;}
+  var e=upList[i]; e.status='uploading'; e.pct=0; upRender();
+  var fd=new FormData(); fd.append('file',e.file,e.file.name);
+  var xhr=new XMLHttpRequest(); xhr.open('POST','/api/upload/'+upDest+'/');
+  xhr.upload.onprogress=function(ev){
+    if(ev.lengthComputable){e.pct=Math.round(ev.loaded/ev.total*100);var fi=document.getElementById('ufill-'+i),it=document.getElementById('ufi-'+i);if(fi)fi.style.width=e.pct+'%';if(it)it.querySelector('.file-item-status').textContent='Uploading… '+e.pct+'%';}
+  };
+  xhr.onload=function(){e.status=xhr.status===200?'done':'error';e.pct=100;upRender();upNext(i+1);};
+  xhr.onerror=function(){e.status='error';upRender();upNext(i+1);};
+  xhr.send(fd);
+}
+// Drag and drop
+(function(){
+  var dz=document.getElementById('up-dropzone');
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.style.borderColor='var(--accent)';});
+  dz.addEventListener('dragleave',function(){dz.style.borderColor='';});
+  dz.addEventListener('drop',function(e){e.preventDefault();dz.style.borderColor='';upFilesSelected(e.dataTransfer.files);});
+}());
+
+// ═══════════════════════════════════════════════════════════════════
+//  FORMAT PAGE
+// ═══════════════════════════════════════════════════════════════════
+window.init_format = function(){};
+function fmtConfirm() {
+  if(!confirm('Format all internal storage? This cannot be undone.'))return;
+  document.getElementById('fmt-btn').style.display='none';
+  document.getElementById('fmt-status').innerHTML='<div id="loader"></div>&nbsp; Formatting…';
+  fetch('/format.html',{method:'POST'}).catch(function(){});
+  setTimeout(function(){showRebootOverlay('Board rebooting after format…',8);},500);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FIRMWARE UPDATE
+// ═══════════════════════════════════════════════════════════════════
+window.init_update = function(){};
+var otaFile=null;
+function otaFileSelected(){
+  var f=document.getElementById('ota-file').files[0]; if(!f)return;
+  otaFile=null; document.getElementById('ota-flash-btn').style.display='none';
+  if(f.name.toLowerCase()!=='fwupdate.bin'){
+    document.getElementById('ota-meta').innerHTML='<div class="file-meta" style="color:var(--red)">✕ Invalid filename — expected fwupdate.bin</div>'; return;
+  }
+  var r=new FileReader(); r.onloadend=function(e){
+    var mb=new Uint8Array(e.target.result);
+    if(parseInt(mb[0])===0xE9){
+      document.getElementById('ota-meta').innerHTML='<div class="file-meta"><span class="val">'+f.name+'</span><br>Size: <span class="val">'+fmtBytes(f.size)+'</span><br>Magic: <span class="val" style="color:var(--green)">0x'+mb[0].toString(16).toUpperCase()+' ✓</span></div>';
+      otaFile=f; document.getElementById('ota-flash-btn').style.display='inline-flex';
+    } else {
+      document.getElementById('ota-meta').innerHTML='<div class="file-meta" style="color:var(--red)">✕ Invalid magic — expected 0xE9, got 0x'+mb[0].toString(16).toUpperCase()+'</div>';
+    }
+  }; r.readAsArrayBuffer(f.slice(0,1));
+}
+function otaFlash(){
+  if(!otaFile)return;
+  document.getElementById('ota-flash-btn').style.display='none';
+  document.getElementById('ota-sel-btn').style.display='none';
+  document.getElementById('ota-bar').style.display='block';
+  document.getElementById('ota-status').textContent='Uploading…';
+  var fd=new FormData(); fd.append('fwupdate',otaFile,otaFile.name);
+  var xhr=new XMLHttpRequest(); xhr.open('POST','/update.html');
+  xhr.upload.onprogress=function(e){
+    if(e.lengthComputable){
+      var p=Math.round(e.loaded/e.total*100);
+      document.getElementById('ota-fill').style.width=p+'%';
+      document.getElementById('ota-status').textContent='Uploading… '+p+'%';
+      if(p===100){document.getElementById('ota-status').textContent='Flashing — do not power off…';setTimeout(function(){showRebootOverlay('Applying new firmware…',10);},1500);}
+    }
+  };
+  xhr.onloadend=function(){};xhr.onerror=function(){};
+  xhr.send(fd);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIG PAGE
+// ═══════════════════════════════════════════════════════════════════
+var cfgSaved={};
+var WIFI_FIELDS=['ap_ssid','ap_pass','web_ip','subnet','web_port','wifi_ssid','wifi_pass','wifi_host'];
+var WIFI_BOOLS=['useap','usewifi'];
+
+window.init_config = function() {
+  fetch('/api/config').then(function(r){return r.json();}).then(function(d){
+    cfgSaved=d;
+    var f=document.getElementById('cfg-form');
+    ['ap_ssid','ap_pass','web_ip','subnet','web_port','wifi_ssid','wifi_pass','wifi_host','usbwait'].forEach(function(n){
+      var el=f.elements[n]; if(el&&d[n]!==undefined){el.value=d[n];el.addEventListener('input',cfgCheck);}
+    });
+    ['useap','usewifi','cache_enabled'].forEach(function(n){
+      var el=f.elements[n]; if(el){el.checked=!!d[n];el.addEventListener('change',cfgCheck);}
+    });
+  }).catch(function(e){ showToast('error','Failed to load config',e.message); });
+};
+
+function cfgCheck(){
+  var f=document.getElementById('cfg-form'),needed=false;
+  WIFI_FIELDS.forEach(function(n){var el=f.elements[n];if(el&&el.value!==String(cfgSaved[n]!==undefined?cfgSaved[n]:''))needed=true;});
+  WIFI_BOOLS.forEach(function(n){var el=f.elements[n];if(el&&el.checked!==!!cfgSaved[n])needed=true;});
+  document.getElementById('restart-warn').style.display=needed?'inline-flex':'none';
+  return needed;
+}
+function cfgHandleSave(){
+  if(cfgCheck()){document.getElementById('cfg-save-btn').style.display='none';document.getElementById('confirm-row').style.display='inline-flex';}
+  else cfgDoSave(false);
+}
+function cfgCancelSave(){document.getElementById('confirm-row').style.display='none';document.getElementById('cfg-save-btn').style.display='';}
+function cfgDoSave(withRestart){
+  var f=document.getElementById('cfg-form');
+  fetch('/config.html',{method:'POST',body:new FormData(f)}).catch(function(){});
+  if(withRestart){cfgCancelSave();showRebootOverlay('Applying settings and restarting…',5);}
+  else{cfgCancelSave();showToast('success','Config saved','Settings applied to ESP32');}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  REBOOT PAGE
+// ═══════════════════════════════════════════════════════════════════
+window.init_reboot = function(){};
+function rbShowConfirm(){document.getElementById('rb-idle').style.display='none';document.getElementById('rb-confirm').style.display='flex';document.getElementById('rb-card').classList.add('confirming');}
+function rbShowIdle(){document.getElementById('rb-confirm').style.display='none';document.getElementById('rb-idle').style.display='flex';document.getElementById('rb-card').classList.remove('confirming');}
+function rbDoReboot(){
+  document.getElementById('rb-confirm').style.display='none';
+  document.getElementById('rb-rebooting').style.display='flex';
+  document.getElementById('rb-card').classList.remove('confirming');
+  document.getElementById('rb-card').classList.add('rebooting');
+  fetch('/reboot.html',{method:'POST'}).catch(function(){});
+  var n=5,el=document.getElementById('rb-count'),lbl=document.getElementById('rb-count-label');
+  var iv=setInterval(function(){n--;el.textContent=n;if(n<=0){clearInterval(iv);el.textContent='…';lbl.textContent='waiting for board';pollUntilAlive();}},1000);
+}
+</script>
+
+<!-- ═══════════════════════ MOVE / COPY DIALOG ═══ -->
+<div id="fm-mv-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)fmCloseMvDlg()">
+  <div class="up-overlay-inner" style="max-width:380px;width:90%">
+    <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:2px">Move / Copy</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px;word-break:break-all" id="fm-mv-src"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <span style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);flex-shrink:0">Into</span>
+      <span style="font-size:11px;color:var(--accent);font-weight:500;word-break:break-all" id="fm-mv-dest-path">/</span>
+    </div>
+    <div id="fm-mv-folder-list" style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);min-height:60px;max-height:220px;overflow-y:auto;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn" style="padding:5px 12px;font-size:11px" onclick="fmCloseMvDlg()">Cancel</button>
+      <button id="fm-copy-btn" class="btn btn-success" style="padding:5px 12px;font-size:11px" onclick="fmDoCopy()">Copy Here</button>
+      <button class="btn btn-accent" style="padding:5px 12px;font-size:11px" onclick="fmDoMove()">Move Here</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
