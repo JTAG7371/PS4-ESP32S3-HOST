@@ -2,11 +2,12 @@
 <img src="media/esp_info.png" />
 
 ## Supported boards
-### Tested with the following boards:
- - Waveshare ESP32-S3-Zero [(link)](https://www.waveshare.com/wiki/ESP32-S3-Zero/)
- - Waveshare ESP32-S3-GEEK [(link)](https://www.waveshare.com/wiki/ESP32-S3-GEEK/)
-
-*Any ESP32-S2/S3 should work providing it has OTG mode*
+| Board | Flash | PSRAM | Notes |
+|---|---|---|---|
+| Waveshare ESP32-S3-Zero [(link)](https://www.waveshare.com/wiki/ESP32-S3-Zero/) | 4MB | Quad SPI | LittleFS |
+| Waveshare ESP32-S3-GEEK [(link)](https://www.waveshare.com/wiki/ESP32-S3-GEEK/) | 16MB | OPI/Octal | FATFS, onboard SD |
+| Generic ESP32-S3 4MB | 4MB | — | LittleFS |
+| Generic ESP32-S3 16MB | 16MB | — | FATFS |
 
 Uncomment the correct board in `config.h` before compiling.
 
@@ -17,12 +18,12 @@ Uncomment the correct board in `config.h` before compiling.
 Pre-built binaries are attached to every [GitHub Release](../../releases/latest).
 
 ### Option 1 — Web flasher (easiest)
-Open **[The Flasher Page](https://jtag7371.github.io/PS4-ESP32S3-HOST/)** in **Chrome or Edge** (Firefox not supported), select your board, connect via USB, and click Flash. No tools required.
+Open **[jtag7371.github.io/PS4-ESP32S3-HOST](https://jtag7371.github.io/PS4-ESP32S3-HOST/)** in **Chrome or Edge** (Firefox not supported), select your board, connect via USB, and click Flash. No tools required.
 
 ### Option 2 — esptool.py
-Download `ESP32S3_WebServer.ino.merged.bin` for your board from the release assets and flash at offset `0x0`:
+Download `{board}-merged.bin` for your board from the release assets (e.g. `geek-16mb-merged.bin`) and flash at offset `0x0`:
 ```
-esptool.py --chip esp32s3 write_flash 0x0 ESP32S3_WebServer.ino.merged.bin
+esptool.py --chip esp32s3 write_flash 0x0 geek-16mb-merged.bin
 ```
 Requires the device to be in download mode — hold **BOOT** while plugging in USB.
 
@@ -35,7 +36,7 @@ See **Arduino IDE settings** and **Libraries** sections below. Run `python build
 
 Once the device is running, updates can be pushed wirelessly — no USB required.
 
-1. Download `fwupdate.bin` for your board from the [releases page](../../releases/latest)
+1. Download `{board}-fwupdate.bin` for your board from the [releases page](../../releases/latest) (e.g. `geek-16mb-fwupdate.bin`)
 2. Browse to `http://<board-ip>/admin`
 3. Go to **Firmware Update**
 4. Upload `fwupdate.bin` and wait for the device to reboot
@@ -99,14 +100,21 @@ Both boards use native USB — no USB-UART chip.
 ## Project structure
 ```
 ESP32S3_WebServer/
-├── ESP32S3_WebServer.ino   main firmware
-├── config.h                board selection + WiFi credentials
-├── admin_panel.h           AUTO-GENERATED — do not edit
-├── exfathax.h              PS4 fake ExFAT image for USB MSC
-├── build_panel.py          run this to regenerate admin_panel.h
+├── ESP32S3_WebServer.ino        main firmware
+├── config.h                     board selection + WiFi credentials
+├── admin_panel.h                AUTO-GENERATED — do not edit
+├── exfathax.h                   PS4 fake ExFAT image for USB MSC
+├── build_panel.py               run this to regenerate admin_panel.h
+├── flash.html                   web flasher (hosted on GitHub Pages)
+├── firmware/
+│   ├── manifest-geek-16mb.json  ESP Web Tools manifest
+│   ├── manifest-zero-4mb.json
+│   ├── manifest-generic-4mb.json
+│   └── manifest-generic-16mb.json
 └── data/
-    ├── admin.html          SPA admin panel (all pages in one file)
-    └── style.css           admin panel CSS
+    ├── admin.html               SPA admin panel (all pages in one file)
+    ├── index.html               fallback page shown when no files are uploaded
+    └── style.css                admin panel CSS
 ```
 
 ---
@@ -121,6 +129,7 @@ ESP32S3_WebServer/
 No LittleFS plugin. No esptool. No partition math.
 
 ---
+
 
 ## Admin panel
 Browse to `http://<board-ip>/admin` after connecting to the AP.
@@ -140,9 +149,11 @@ The admin panel is a Single Page Application — all pages load instantly with n
 | Board | Filesystem | API param | Notes |
 |---|---|---|---|
 | S3-Zero | LittleFS | `fs=lfs` | ~1.4MB free |
-| S3-GEEK | InternalFS (FFat) | `fs=lfs` | ~9.9MB free |
+| S3-GEEK | FFat (FATFS) | `fs=lfs` | ~9.9MB free |
+| Generic 4MB | LittleFS | `fs=lfs` | ~1.4MB free |
+| Generic 16MB | FFat (FATFS) | `fs=lfs` | ~9.9MB free |
 
-Both boards support an optional SD card (`fs=sd`). SD takes priority over InternalFS for `index.html` and `config.json`.
+All boards support an optional SD card (`fs=sd`). SD takes priority over InternalFS for `index.html` and `config.json`.
 
 ### Enabling SD card
 Uncomment `#define USE_SD` in `config.h`.
