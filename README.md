@@ -18,7 +18,7 @@ Uncomment the correct board in `config.h` before compiling.
 Pre-built binaries are attached to every [GitHub Release](../../releases/latest).
 
 ### Option 1 — Web flasher (easiest)
-Open **[jtag7371.github.io/PS4-ESP32S3-HOST](https://jtag7371.github.io/PS4-ESP32S3-HOST/)** in **Chrome or Edge** (Firefox not supported), select your board, connect via USB, and click Flash. No tools required.
+Open **[The Flasher Page](https://jtag7371.github.io/PS4-ESP32S3-HOST/)** in **Chrome or Edge** (Firefox not supported), select your board, connect via USB, and click Flash. No tools required.
 
 ### Option 2 — esptool.py
 Download `{board}-merged.bin` for your board from the release assets (e.g. `geek-16mb-merged.bin`) and flash at offset `0x0`:
