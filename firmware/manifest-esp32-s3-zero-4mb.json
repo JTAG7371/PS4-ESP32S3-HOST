@@ -1,0 +1,11 @@
+{
+  "name": "ESP32-S3 WebServer — S3-Zero 4MB",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "zero-4mb/ESP32S3_WebServer.ino.merged.bin",   "offset": 0 }
+      ]
+    }
+  ]
+}

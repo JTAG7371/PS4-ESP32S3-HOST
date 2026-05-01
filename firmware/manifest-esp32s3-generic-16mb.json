@@ -1,0 +1,11 @@
+{
+  "name": "ESP32-S3 WebServer — Generic 16MB",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "generic-16mb/ESP32S3_WebServer.ino.merged.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
