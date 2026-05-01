@@ -1,11 +1,17 @@
 # ESP32-S3 Web Server
 
 ## Supported boards
+### Tested with the following boards:
+ - Waveshare ESP32-S3-Zero [(link)](https://www.waveshare.com/wiki/ESP32-S3-Zero/)
+ - Waveshare ESP32-S3-GEEK [(link)](https://www.waveshare.com/wiki/ESP32-S3-GEEK/)
+
+*Any ESP32-S2/S3 should work providing it has OTG mode*
+
 Uncomment the correct board in `config.h` before compiling.
 
 ---
 
-## Arduino IDE settings — ESP32-S3-Zero
+## Arduino IDE settings — Waveshare ESP32-S3-Zero
 
 | Setting | Value |
 |---|---|
@@ -21,7 +27,7 @@ Uncomment the correct board in `config.h` before compiling.
 
 ---
 
-## Arduino IDE settings — ESP32-S3-GEEK
+## Arduino IDE settings — Waveshare ESP32-S3-GEEK
 
 | Setting | Value |
 |---|---|
@@ -88,7 +94,7 @@ Browse to `http://<board-ip>/admin` after connecting to the AP.
 
 The admin panel is a Single Page Application — all pages load instantly with no iframe overhead. Pages included:
 - **ESP Info** — live board diagnostics, RAM/storage bars, network status
-- **File Manager** — browse, upload, download, delete files and folders on InternalFS and SD
+- **File Manager** — browse, upload, download, rename, copy, move, delete files and folders on InternalFS and SD
 - **File Upload** — multi-file upload with per-file progress bars
 - **Format Storage** — erase InternalFS
 - **Firmware Update** — OTA flash with progress + auto-reconnect
@@ -138,6 +144,8 @@ Requesting `/Cache.manifest` generates a manifest dynamically by scanning both I
 | `/api/upload/lfs/path/` | POST | Upload to InternalFS at path |
 | `/api/upload/sd/path/` | POST | Upload to SD at path |
 | `/api/mkdir` | POST | Create folder |
+| `/api/copy` | POST | Copy a file to a location |
+| `/api/rename` | POST | Rename a file or folder |
 | `/api/usb/on` | POST | Enable PS4 USB MSC (ExFAT exploit) |
 | `/api/usb/off` | POST | Disable USB MSC + reboot |
 | `/Cache.manifest` | GET | Dynamic AppCache manifest |
