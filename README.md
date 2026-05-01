@@ -1,4 +1,5 @@
 # ESP32-S3 Web Server
+<img src="media/esp_info.png" />
 
 ## Supported boards
 ### Tested with the following boards:
@@ -153,3 +154,11 @@ Requesting `/Cache.manifest` generates a manifest dynamically by scanning both I
 | `/update.html` | POST | OTA firmware flash |
 | `/format.html` | POST | Format InternalFS + reboot |
 | `/reboot.html` | POST | Reboot |
+
+## Preview Images
+![File Manager](media/file_manager.png)
+![File Upload](media/file_upload.png)
+![Format Storage](media/format_storage.png)
+![Firmware Update](media/firmware_update.png)
+![Config Editor](media/config_editor.png)
+![Reboot ESP](media/reboot.png)
