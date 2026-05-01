@@ -14,21 +14,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - key: geek-16mb
-            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
-            define: BOARD_S3_GEEK
-
           - key: zero-4mb
             fqbn: "esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=default,PSRAM=enabled"
             define: BOARD_S3_ZERO
 
+          - key: geek-16mb
+            fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
+            define: BOARD_S3_GEEK
+
           - key: generic-4mb
             fqbn: "esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=default,PSRAM=disabled"
-            define: BOARD_S3_4MB
+            define: BOARD_S3_ZERO
 
           - key: generic-16mb
             fqbn: "esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=disabled"
-            define: USE_FFAT
+            define: BOARD_S3_GEEK
 
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +36,21 @@ jobs:
       - name: Set up arduino-cli
         uses: arduino/setup-arduino-cli@v2
 
+      - name: Cache arduino-cli core and libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-${{ runner.os }}-${{ hashFiles('.github/workflows/build.yml') }}
+          restore-keys: arduino-${{ runner.os }}-
+
       - name: Add ESP32 board index
         run: |
-          arduino-cli config init
+          arduino-cli config init --overwrite
           arduino-cli config add board_manager.additional_urls \
             https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli config set library.enable_unsafe_install true
 
       - name: Install ESP32 core
         run: |
@@ -49,7 +59,6 @@ jobs:
 
       - name: Install libraries
         run: |
-          arduino-cli config set library.enable_unsafe_install true
           arduino-cli lib install "ArduinoJson"
           arduino-cli lib install --git-url https://github.com/me-no-dev/AsyncTCP.git
           arduino-cli lib install --git-url https://github.com/me-no-dev/ESPAsyncWebServer.git

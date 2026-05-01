@@ -31,7 +31,7 @@
   // This disables Serial monitor. OTA via WiFi still works.
 
 #else
-  #error "No board selected — uncomment one in config.h"
+  // #error "No board selected — uncomment one in config.h"
 #endif
 
 // ── Access Point ──────────────────────────────────────────────────
