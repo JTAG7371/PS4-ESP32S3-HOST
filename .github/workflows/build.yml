@@ -62,13 +62,16 @@ jobs:
           sed -i 's/^#define BOARD_S3_GEEK/\/\/ #define BOARD_S3_GEEK/' config.h
           sed -i 's/^#define BOARD_S3_ZERO/\/\/ #define BOARD_S3_ZERO/' config.h
 
+      - name: Stage sketch in named directory
+        run: cp -r . /tmp/ESP32S3_WebServer
+
       - name: Compile ${{ matrix.key }}
         run: |
           arduino-cli compile \
             --fqbn "${{ matrix.fqbn }}" \
             --build-property "compiler.cpp.extra_flags=-D${{ matrix.define }}" \
-            --output-dir out \
-            ESP32S3_WebServer.ino
+            --output-dir ${{ github.workspace }}/out \
+            /tmp/ESP32S3_WebServer
 
       - name: Stage merged binary
         run: |
