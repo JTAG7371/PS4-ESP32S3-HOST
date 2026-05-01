@@ -20,7 +20,7 @@ jobs:
             define: BOARD_S3_ZERO
 
           - key: geek-16mb
-            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi"
+            fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=enabled"
             define: BOARD_S3_GEEK
 
           - key: generic-4mb
