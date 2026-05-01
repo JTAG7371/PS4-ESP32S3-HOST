@@ -2,8 +2,10 @@
 
 // ── Board selection ───────────────────────────────────────────────
 // Uncomment the board you are using. Only one should be active.
-#define BOARD_S3_ZERO   // Waveshare ESP32-S3-Zero  (4MB flash, Quad PSRAM)
-// #define BOARD_S3_GEEK   // Waveshare ESP32-S3-GEEK  (16MB flash, OPI PSRAM)
+// #define BOARD_S3_ZERO          // Waveshare ESP32-S3-Zero  (4MB flash, Quad PSRAM)
+// #define BOARD_S3_GEEK          // Waveshare ESP32-S3-GEEK  (16MB flash, OPI PSRAM)
+// #define BOARD_S3_GENERIC_4MB   // Generic ESP32-S3 with 4MB flash
+// #define BOARD_S3_GENERIC_16MB  // Generic ESP32-S3 with 16MB flash
 
 // ── Board-specific pin definitions ────────────────────────────────
 #if defined(BOARD_S3_GEEK)
@@ -30,8 +32,13 @@
   //   USB Mode        → USB-OTG
   // This disables Serial monitor. OTA via WiFi still works.
 
+#elif defined(BOARD_S3_GENERIC_4MB) || defined(BOARD_S3_GENERIC_16MB)
+  #if defined(BOARD_S3_GENERIC_16MB)
+    // GENERIC 16MB uses FATFS partition scheme
+    #define USE_FFAT
+  #endif
 #else
-  // #error "No board selected — uncomment one in config.h"
+  #error "No board selected — uncomment one in config.h"
 #endif
 
 // ── Access Point ──────────────────────────────────────────────────

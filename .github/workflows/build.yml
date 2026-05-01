@@ -25,11 +25,11 @@ jobs:
 
           - key: generic-4mb
             fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc"
-            define: BOARD_S3_ZERO
+            define: BOARD_S3_GENERIC_4MB
 
           - key: generic-16mb
             fqbn: "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
-            define: BOARD_S3_ZERO
+            define: BOARD_S3_GENERIC_16MB
 
     steps:
       - uses: actions/checkout@v4
