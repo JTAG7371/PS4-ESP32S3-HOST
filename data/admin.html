@@ -254,9 +254,103 @@
     .fs-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
     .fs-tab  { padding: 5px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; cursor: pointer; background: transparent; color: var(--text-dim); transition: all var(--transition); }
     .fs-tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .fs-tab:disabled { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Mobile responsive ────────────────────────────── */
+    @media (max-width: 768px) {
+      .topbar { display: flex; }
+
+      .sidenav {
+        top: 48px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 200;
+      }
+      .sidenav.open { transform: translateX(0); }
+
+      #nav-backdrop.show { display: block; }
+
+      .main {
+        margin-left: 0 !important;
+        padding-top: 48px;
+        height: 100vh;
+        height: 100dvh;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+
+      .page { padding: 20px 16px 48px; }
+
+      .dashboard { grid-template-columns: 1fr !important; }
+
+      input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="button"]) {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      #prog-bar-wrap {
+        width: 90%;
+        max-width: 400px;
+      }
+
+      .form-table {
+        table-layout: fixed;
+      }
+      .form-table td:first-child {
+        width: 38%;
+        word-break: break-word;
+      }
+
+      .table-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .fm-toolbar { flex-wrap: wrap; row-gap: 6px; }
+
+      /* File manager: hide Size column to avoid side-scroll */
+      #view-fileman thead th:nth-child(3),
+      #view-fileman #fm-body td:nth-child(3) { display: none; }
+
+      /* Remove fixed 130px on Remove column, let it shrink */
+      #view-fileman thead th:last-child { width: auto !important; }
+
+      /* Hide delete-confirm label text, keep only Cancel/Confirm buttons */
+      .confirm-wrap > span:first-child { display: none; }
+
+      /* Allow Edit column buttons to wrap so they don't force width */
+      #view-fileman #fm-body td:nth-child(5) { white-space: normal !important; }
+
+      .sidenav a { padding: 12px 10px; }
+
+      #toast {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        max-width: none;
+      }
+
+      .upload-summary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .reboot-body { padding: 28px 16px; }
+      .reboot-desc { max-width: 100%; }
+    }
   </style>
 </head>
 <body>
+
+<!-- ── Mobile top bar ──────────────────────────────────────────── -->
+<div class="topbar">
+  <button class="hamburger" onclick="toggleNav()" aria-label="Menu">
+    <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+  </button>
+  <span class="topbar-title">ESP32 Admin</span>
+</div>
+<div id="nav-backdrop" onclick="closeNav()"></div>
 
 <!-- ── Sidebar ─────────────────────────────────────────────────── -->
 <div class="sidenav">
@@ -359,7 +453,7 @@
       </div>
       <div class="fs-tabs">
         <button class="fs-tab active" onclick="fmSwitchFs('lfs',this)" id="tab-lfs">Internal FS</button>
-        <button class="fs-tab" onclick="fmSwitchFs('sd',this)">SD Card</button>
+        <button class="fs-tab" onclick="fmSwitchFs('sd',this)" id="tab-sd">SD Card</button>
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <div class="breadcrumb" id="fm-breadcrumb"></div>
@@ -392,10 +486,12 @@
           <button class="btn btn-accent" style="padding:4px 10px;font-size:11px" onclick="fmDoMkdir()">Create</button>
           <button class="btn" style="padding:4px 10px;font-size:11px" onclick="fmToggleMkdir()">Cancel</button>
         </div>
+        <div class="table-scroll">
         <table>
           <thead><tr><th style="width:30px;text-align:center;padding:6px"><input type="checkbox" class="fm-sel-cb" id="fm-cb-all" onchange="fmToggleSelAll(this)"></th><th class="fm-th-sort" onclick="fmSetSort('name')">Name<span class="fm-sort-arrow on" id="fm-sort-name">↑</span></th><th class="fm-th-sort" style="width:80px" onclick="fmSetSort('size')">Size<span class="fm-sort-arrow" id="fm-sort-size">↕</span></th><th style="width:60px;text-align:center">Get</th><th style="width:70px;text-align:center">Edit</th><th style="width:130px;text-align:center">Remove</th></tr></thead>
           <tbody id="fm-body"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Loading…</td></tr></tbody>
         </table>
+        </div>
       </div>
     </div>
   </div>
@@ -409,7 +505,7 @@
       </div>
       <div class="fs-tabs">
         <button class="fs-tab active" onclick="upSetDest('lfs',this)" id="tab-lfs-up">Internal FS</button>
-        <button class="fs-tab" onclick="upSetDest('sd',this)">SD Card</button>
+        <button class="fs-tab" onclick="upSetDest('sd',this)" id="tab-sd-up">SD Card</button>
       </div>
       <div class="card"><div class="card-body">
         <div class="upload-zone" id="up-dropzone">
@@ -577,9 +673,24 @@
 var _currentView = 'info';
 var _viewInited  = {};
 
+function toggleNav() {
+  var sn = document.querySelector('.sidenav');
+  var bd = document.getElementById('nav-backdrop');
+  var open = sn.classList.toggle('open');
+  bd.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+
+function closeNav() {
+  document.querySelector('.sidenav').classList.remove('open');
+  document.getElementById('nav-backdrop').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
 function nav(id, linkEl) {
   document.querySelectorAll('.sidenav a').forEach(function(a){ a.classList.remove('active'); });
   if (linkEl) linkEl.classList.add('active');
+  if (window.innerWidth <= 768) closeNav();
   document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
   document.getElementById('view-' + id).classList.add('active');
   _currentView = id;
@@ -646,12 +757,23 @@ function pollUntilAlive() {
     .catch(function(){ setTimeout(pollUntilAlive, 1000); });
 }
 
+var _sdEnabled = false;
+
+function setSdTabState() {
+  var tabSd   = document.getElementById('tab-sd');
+  var tabSdUp = document.getElementById('tab-sd-up');
+  if (tabSd)   tabSd.disabled   = !_sdEnabled;
+  if (tabSdUp) tabSdUp.disabled = !_sdEnabled;
+}
+
 // Fetch fsName from status on load
 fetch('/api/status').then(function(r){ return r.json(); }).then(function(d) {
-  _fsName = d.fsName || 'Internal FS';
+  _fsName    = d.fsName    || 'Internal FS';
+  _sdEnabled = !!d.sdEnabled;
   document.getElementById('tab-lfs').textContent    = _fsName;
   document.getElementById('tab-lfs-up').textContent = _fsName;
   document.getElementById('nav-status').textContent = 'Online  /  ' + d.chip;
+  setSdTabState();
 }).catch(function(){});
 
 // Auto-init info on load
