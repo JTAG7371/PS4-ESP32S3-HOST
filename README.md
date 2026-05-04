@@ -5,7 +5,7 @@
 | Board | Flash | PSRAM | Notes |
 |---|---|---|---|
 | Waveshare ESP32-S3-Zero [(link)](https://www.waveshare.com/wiki/ESP32-S3-Zero/) | 4MB | Quad SPI | LittleFS |
-| Waveshare ESP32-S3-GEEK [(link)](https://www.waveshare.com/wiki/ESP32-S3-GEEK/) | 16MB | OPI/Octal | FATFS, onboard SD |
+| Waveshare ESP32-S3-GEEK [(link)](https://www.waveshare.com/wiki/ESP32-S3-GEEK/) | 16MB | Quad SPI | FATFS, onboard SD |
 | Generic ESP32-S3 4MB | 4MB | — | LittleFS |
 | Generic ESP32-S3 16MB | 16MB | — | FATFS |
 
